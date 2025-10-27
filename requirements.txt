@@ -1,0 +1,8 @@
+requests
+pandas
+geopandas
+shapely
+folium
+numpy
+h3
+scikit-learn
