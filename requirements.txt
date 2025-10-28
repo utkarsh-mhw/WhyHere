@@ -6,3 +6,4 @@ folium
 numpy
 h3
 scikit-learn
+colorsys

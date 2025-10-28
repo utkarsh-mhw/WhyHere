@@ -1,3 +1,5 @@
+
+
 import sys
 import requests
 import pandas as pd
@@ -31,7 +33,7 @@ def distance_decay_score(hex_center, pois_subset, decay_rate=1.5, max_distance_k
 
 
 def calculate_accessibility_scores(hexagons, df_pois, poi_types_config=None):
-    
+
     if poi_types_config is None:
         poi_types_config = {
             'restaurant': {'types': ['restaurant', 'cafe'], 'decay_rate': 2.0, 'max_distance_km': 2},
@@ -71,15 +73,69 @@ def calculate_accessibility_scores(hexagons, df_pois, poi_types_config=None):
     return df_hexagons
 
 
-def apply_user_weights(df_hexagons, user_weights):
+def smooth_scores_spatially(df_hexagons, score_columns=None, neighbor_weight=0.3):
+
+    if score_columns is None:
+        score_columns = [col for col in df_hexagons.columns if col.endswith('_accessibility')]
     
-    print("\nApplying User Weights")
+    print(f"\nApplying spatial smoothing to {len(score_columns)} score columns...")
+    print(f"Neighbor weight: {neighbor_weight:.2f}")
+    
+    df_smoothed = df_hexagons.copy()
+    
+    # Create hex_id lookup for fast access
+    hex_to_idx = {hex_id: idx for idx, hex_id in enumerate(df_hexagons['hex_id'])}
+    
+    # For each hexagon, find neighbors and smooth scores
+    for i, row in df_hexagons.iterrows():
+        if i % 50 == 0:
+            print(f"  Smoothing hexagon {i}/{len(df_hexagons)}...")
+        
+        hex_id = row['hex_id']
+        
+        # Get neighbor hexagon IDs (k-ring with k=1 means immediate neighbors)
+        neighbor_ids = h3.grid_disk(hex_id, 1)  # Returns set including the hex itself
+        # neighbor_ids.discard(hex_id)  # Remove self
+        if hex_id in neighbor_ids:
+            neighbor_ids.remove(hex_id)  # Remove self
+        
+        # Find neighbors that exist in our dataset
+        valid_neighbors = [nid for nid in neighbor_ids if nid in hex_to_idx]
+        
+        if not valid_neighbors:
+            continue  # No neighbors, keep original scores
+        
+        # Smooth each score column
+        for col in score_columns:
+            own_score = row[col]
+            neighbor_scores = [df_hexagons.loc[hex_to_idx[nid], col] for nid in valid_neighbors]
+            avg_neighbor_score = np.mean(neighbor_scores)
+            
+            # Weighted average: keep some of own score, blend with neighbors
+            smoothed_score = (1 - neighbor_weight) * own_score + neighbor_weight * avg_neighbor_score
+            df_smoothed.at[i, col] = smoothed_score
+    
+    print("✓ Spatial smoothing complete")
+    return df_smoothed
+
+
+def apply_user_weights(df_hexagons, user_weights, smooth_before_weighting=True, neighbor_weight=0.3):
+
+    print("\n" + "="*60)
+    print("APPLYING USER WEIGHTS")
+    print("="*60)
     print(f"User preferences: {user_weights}")
     print(f"Sum of weights: {sum(user_weights.values()):.2f} (should be 1.0)")
     
+    df_hexagons = df_hexagons.copy()
+    
+    # Apply spatial smoothing if requested
+    if smooth_before_weighting:
+        score_columns = [f"{poi_type}_accessibility" for poi_type in user_weights.keys()]
+        df_hexagons = smooth_scores_spatially(df_hexagons, score_columns, neighbor_weight)
+    
     # Normalize accessibility scores to 0-1 range
     scaler = MinMaxScaler()
-    df_hexagons = df_hexagons.copy()  # Avoid modifying the input DataFrame
     
     for poi_type in user_weights:
         score_column = f"{poi_type}_accessibility"
