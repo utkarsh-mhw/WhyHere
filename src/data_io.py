@@ -39,6 +39,14 @@ def load_pois(file_name):
     print("Summary by type:")
     print(df_pois['type'].value_counts())
 
+    '''
+    type
+    latitude
+    longitude
+    name
+    attribute
+    '''
+    
     return df_pois
 
 def save_map(folium_map, output_file='suitability_map.html'):
