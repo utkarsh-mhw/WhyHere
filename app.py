@@ -5,6 +5,13 @@ import pandas as pd
 import json
 from src.fetch_csv_data import *
 from src import *
+from src.fetch_data import *
+# from src.data_io import *
+from src.data_prep import *
+from src.scoring import *
+from src.threshold_clustering import *
+from src.dbscan_clustering import *
+from src.visualization import *
 
 # ====================================================================
 # Configuration
@@ -66,14 +73,56 @@ def get_poi_data():
     try:
         # Call the data loader function
         df_pois = load_pois()
-        
+        # we'll need data form UI payload
+        # format required
+        """
+        {
+        "radius_km": 5,
+        "user_weights": {
+            "restaurant": 0.4,
+            "grocery_store": 0.3,
+            "school": 0.3
+            ....
+            }
+        }
+        """
+
+        #get inputs from UI payload
+        data = request.get_json(force=True) or {}
+        user_radius_km = data.get("radius_km", 12)
+        user_weights = data.get("user_weights", {
+            'police_station': 2,
+            'grocery_store': 3,
+            'hospital': 1,
+            'marta_stop': 1,
+            'school': 0,
+            'restaurant': 3
+        })
+        budget = data.get("budget", 1000)
+        has_car = data.get("has_car", True)
+        print(f"User Radius (km): {user_radius_km}")
+        print(f"User Weights: {user_weights}")
         #call data_prep method here, providing df_pois as input
+        hexagons = create_hex_grids_with_radius(df_pois, radius_km=user_radius_km, size_of_grid=8)
+        print(f"Number of hexagons created: {len(hexagons)}")
 
         #call scoring method here, providing scored data as input
+        df_hexagons = calculate_accessibility_scores(hexagons, df_pois)
+        df_hexagons = apply_user_weights(
+            df_hexagons,
+            user_weights,
+            smooth_before_weighting=True,
+            neighbor_weight=0.3
+        )
 
         #call clustering method here, providing scored data as input
-
+        df_classified = cluster_based_on_score(df_hexagons, n_tiers=10)
+        print("type of df_classified:", type(df_classified))
         #call visualization method here (if needed to return map data)
+        # UI team needs a JSON output, the following fucntion converts the data to JSON
+        df_classified_json = df_classified.to_json(orient='records')
+        df_classified_json = json.loads(df_classified_json)
+        print("type of df_classified_json:", type(df_classified_json))
 
         #then replace the below data key's value (df_pois) with the data generated from visualization method or clustering method as needed
 
@@ -87,7 +136,7 @@ def get_poi_data():
             'success': True,
             'message': f'Successfully loaded {len(df_pois)} Points of Interest.',
             'record_count': len(df_pois),
-            'data':df_pois
+            'data':df_classified_json
         }), 200
 
     except ValueError as ve:
@@ -97,10 +146,12 @@ def get_poi_data():
             'message': f'Data Validation Error: {str(ve)}'
         }), 400
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error fetching data via API: {e}", file=sys.stderr)
         return jsonify({
             'success': False, 
-            'message': f'An unexpected error occurred during Databricks fetch: {str(e)}'
+            'message': f'An unexpected error occurred during fetch: {str(e)}'
         }), 500
 
 @app.route('/analyze', methods=['POST'])
