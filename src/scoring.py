@@ -33,19 +33,23 @@ def distance_decay_score(hex_center, pois_subset, decay_rate=1.5, max_distance_k
 
 
 def calculate_accessibility_scores(hexagons, df_pois, poi_types_config=None):
+    #update this fucntion to account for accesibility based on whether user has vehicle or not
 
     if poi_types_config is None:
         poi_types_config = {
-            'restaurant': {'types': ['restaurant', 'cafe'], 'decay_rate': 2.0, 'max_distance_km': 2},
-            'park': {'types': ['park'], 'decay_rate': 1.5, 'max_distance_km': 3},
-            'clinic': {'types': ['clinic'], 'decay_rate': 1.0, 'max_distance_km': 5}
+            'restaurant': {'types': ['restaurant'], 'decay_rate': 1.5, 'max_distance_km': 10},
+            'grocery_store': {'types': ['grocery_store'], 'decay_rate': 2, 'max_distance_km': 8},
+            'school': {'types': ['school'], 'decay_rate': 1, 'max_distance_km': 15},
+            'hospital': {'types': ['hospital'], 'decay_rate': 0.8, 'max_distance_km': 20},
+            'marta_stop': {'types': ['marta_stop'], 'decay_rate': 0.5, 'max_distance_km': 5},
+            'police_station': {'types': ['police_station'], 'decay_rate': 0.5, 'max_distance_km': 10},
         }
     
     hex_data = []
     print("Calculating accessibility scores for each hexagon...")
     
     for i, hex_id in enumerate(hexagons):
-        if i % 50 == 0:
+        if i % 25 == 0:
             print(f"  Processing hexagon {i}/{len(hexagons)}...")
         
         hex_center = h3.cell_to_latlng(hex_id)
@@ -64,13 +68,30 @@ def calculate_accessibility_scores(hexagons, df_pois, poi_types_config=None):
         hex_data.append(hex_scores)
     
     df_hexagons = pd.DataFrame(hex_data)
-    print(f"\n✓ Calculated accessibility scores for {len(df_hexagons)} hexagons")
+    print(f"\nCalculated accessibility scores for {len(df_hexagons)} hexagons")
     
     print("\nAccessibility Score Statistics:")
     score_columns = [f"{poi_type}_accessibility" for poi_type in poi_types_config]
     print(df_hexagons[score_columns].describe())
     
     return df_hexagons
+
+def normalize_user_weights(raw_weights, method='exponential', scale_factor=2, power=1.5):
+    filtered = {k: v for k, v in raw_weights.items() if v > 0}
+    if not filtered:
+        raise ValueError("At least one POI type must have importance > 0")
+    
+    if method == 'linear':
+        total = sum(filtered.values())
+        normalized = {k: v/total for k, v in filtered.items()}
+    
+    elif method == 'exponential':
+        scaled = {k: scale_factor ** v for k, v in filtered.items()}
+        total = sum(scaled.values())
+        normalized = {k: v/total for k, v in scaled.items()}
+
+    return normalized
+
 
 
 def smooth_scores_spatially(df_hexagons, score_columns=None, neighbor_weight=0.3):
@@ -79,7 +100,7 @@ def smooth_scores_spatially(df_hexagons, score_columns=None, neighbor_weight=0.3
         score_columns = [col for col in df_hexagons.columns if col.endswith('_accessibility')]
     
     print(f"\nApplying spatial smoothing to {len(score_columns)} score columns...")
-    print(f"Neighbor weight: {neighbor_weight:.2f}")
+
     
     df_smoothed = df_hexagons.copy()
     
@@ -115,17 +136,18 @@ def smooth_scores_spatially(df_hexagons, score_columns=None, neighbor_weight=0.3
             smoothed_score = (1 - neighbor_weight) * own_score + neighbor_weight * avg_neighbor_score
             df_smoothed.at[i, col] = smoothed_score
     
-    print("✓ Spatial smoothing complete")
+    print("Spatial smoothing complete")
     return df_smoothed
 
 
-def apply_user_weights(df_hexagons, user_weights, smooth_before_weighting=True, neighbor_weight=0.3):
+def apply_user_weights(df_hexagons, raw_user_weights, smooth_before_weighting=True, neighbor_weight=0.3, normalization_method='exponential'):
 
-    print("\n" + "="*60)
-    print("APPLYING USER WEIGHTS")
-    print("="*60)
-    print(f"User preferences: {user_weights}")
-    print(f"Sum of weights: {sum(user_weights.values()):.2f} (should be 1.0)")
+    
+    print(f"Applying user preferences: {raw_user_weights}")
+    # print(f"Sum of weights: {sum(user_weights.values()):.2f} (should be 1.0)")
+
+    user_weights = normalize_user_weights(raw_user_weights, method=normalization_method)
+    print(f"Normalized weights ({normalization_method}): {user_weights}")
     
     df_hexagons = df_hexagons.copy()
     
