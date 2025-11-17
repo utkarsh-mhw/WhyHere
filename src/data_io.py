@@ -12,6 +12,7 @@ from folium.plugins import HeatMap
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.preprocessing import MinMaxScaler
+import json
 
 
 def save_pois(all_pois, file_name):
@@ -113,3 +114,14 @@ def save_geojson(df, filename, geometry_column='hex_id', geometry_func=None):
     file_path = f"data/output_data/{filename}.geojson"
     gdf.to_file(file_path, driver='GeoJSON')
     print(f"Saved GeoJSON: {file_path}")
+
+
+def convert_json(df):
+
+    records = df.replace({np.nan: None}).to_dict(orient="records")
+    return records
+
+def save_json(data, file_name):
+    filepath = f"data/output_data/{file_name}.json"
+    with open(filepath, "w") as f:
+        json.dump(data, f, indent=4)

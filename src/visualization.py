@@ -6,6 +6,34 @@ import h3
 import numpy as np
 
 
+def get_tier_colors(n_tiers):
+    """Generate color gradient for n tiers."""
+    if n_tiers == 3:
+        return {
+            0: '#2ecc71',  # Green
+            1: '#f39c12',  # Orange
+            2: '#e74c3c'   # Red
+        }
+    
+    # For any other n_tiers, generate gradient
+    colors = {}
+    for i in range(n_tiers):
+        ratio = i / (n_tiers - 1) if n_tiers > 1 else 0
+        # Green (46,204,113) → Yellow (241,196,15) → Red (231,76,60)
+        if ratio < 0.5:
+            # Green to Yellow
+            r = int(46 + (241 - 46) * (ratio * 2))
+            g = int(204 + (196 - 204) * (ratio * 2))
+            b = int(113 + (15 - 113) * (ratio * 2))
+        else:
+            # Yellow to Red
+            r = int(241 + (231 - 241) * ((ratio - 0.5) * 2))
+            g = int(196 + (76 - 196) * ((ratio - 0.5) * 2))
+            b = int(15 + (60 - 15) * ((ratio - 0.5) * 2))
+        colors[i] = f'#{r:02x}{g:02x}{b:02x}'
+    
+    return colors
+
 def hex_to_polygon(hex_id):
     """Convert H3 hexagon ID to Shapely polygon."""
     try:
@@ -178,13 +206,16 @@ def create_suitability_map(df_hexagons, user_weights, center=(33.749, -84.388),
     
     # Initialize map
     m = folium.Map(location=center, zoom_start=zoom_start, tiles=tiles)
+    # m = folium.Map(location=center, zoom_start=zoom_start, tiles=tiles)
     
     # Hardcoded colors
-    colors = {
-        0: '#2ecc71',  # Green - Most Suitable
-        1: '#f39c12',  # Orange - Okay
-        2: '#e74c3c'   # Red - Less Suitable
-    }
+    n_tiers = df_hexagons[suitability_column].nunique()
+    colors = get_tier_colors(n_tiers)
+    # colors = {
+    #     0: '#2ecc71',  # Green - Most Suitable
+    #     1: '#f39c12',  # Orange - Okay
+    #     2: '#e74c3c'   # Red - Less Suitable
+    # }
     
     # Add title
     title_html = f'''

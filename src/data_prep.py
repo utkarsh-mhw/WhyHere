@@ -14,6 +14,32 @@ from sklearn.cluster import KMeans, DBSCAN
 from sklearn.preprocessing import MinMaxScaler
 
 
+def calculate_max_min_coordinates(center, radius_km):
+    center_lat, center_lon = center
+    # Convert radius to lat/lon degrees (approximate)
+    lat_radius = radius_km / 111  # 1 degree lat ≈ 111 km
+    lon_radius = radius_km / (111 * np.cos(np.radians(center_lat)))  # Adjust for latitude
+    
+    lat_min = center_lat - lat_radius
+    lat_max = center_lat + lat_radius
+    lon_min = center_lon - lon_radius
+    lon_max = center_lon + lon_radius
+
+    return (lat_min, lat_max, lon_min, lon_max)
+
+    
+
+
+def keep_pois_within_bbox(df_pois, radius, center = (33.749, -84.388)):
+    # print(f"Keeping POIs withing radius {radius} km of center ({center:.4f}, {center:.4f})")
+    lat_min, lat_max, lon_min, lon_max = calculate_max_min_coordinates(center, radius)
+    mk = df_pois['lat'].between(lat_min, lat_max) & df_pois['lon'].between(lon_min, lon_max)
+    filt_pois = df_pois[mk].copy()
+    print(f"Filtered POIs from {len(df_pois)} to {len(filt_pois)} within bbox")
+    filt_pois.reset_index(drop=True, inplace=True)
+    return filt_pois
+
+
 def create_hex_grids_with_boundaries(df_pois, size_of_grid = 8):
 
 
@@ -52,17 +78,21 @@ def create_hex_grids_with_radius(df_pois, radius_km, center = (33.749, -84.388),
 
 
 
-    # use_circular = True
+    # # use_circular = True
     center_lat, center_lon = center
-    # Convert radius to lat/lon degrees (approximate)
-    lat_radius = radius_km / 111  # 1 degree lat ≈ 111 km
-    lon_radius = radius_km / (111 * np.cos(np.radians(center_lat)))  # Adjust for latitude
+    # # Convert radius to lat/lon degrees (approximate)
+    # lat_radius = radius_km / 111  # 1 degree lat ≈ 111 km
+    # lon_radius = radius_km / (111 * np.cos(np.radians(center_lat)))  # Adjust for latitude
     
-    lat_min = center_lat - lat_radius
-    lat_max = center_lat + lat_radius
-    lon_min = center_lon - lon_radius
-    lon_max = center_lon + lon_radius
-        
+    # lat_min = center_lat - lat_radius
+    # lat_max = center_lat + lat_radius
+    # lon_min = center_lon - lon_radius
+    # lon_max = center_lon + lon_radius
+
+
+    
+
+    lat_min, lat_max, lon_min, lon_max = calculate_max_min_coordinates(center, radius_km)        
     print(f"Using circular boundary: center ({center_lat:.4f}, {center_lon:.4f}), radius {radius_km} km")
 
     # Generate hexagons
