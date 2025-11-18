@@ -14,6 +14,7 @@ from folium.plugins import HeatMap
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.preprocessing import MinMaxScaler
+import hashlib
 
 
 def distance_decay_score(hex_center, pois_subset, decay_rate=1.5, max_distance_km=5, invert=False):
@@ -34,53 +35,72 @@ def distance_decay_score(hex_center, pois_subset, decay_rate=1.5, max_distance_k
     
     return score
 
+import hashlib
+_ACCESSIBILITY_CACHE = {} # Cache for accessibility scores
 
-def calculate_accessibility_scores(hexagons, df_pois, user_has_vehicle ,poi_types_config=None):
-    #update this fucntion to account for accesibility based on whether user has vehicle or not
 
+def _make_hex_key(hexagons):
+    """
+    Create a stable hash key from the list of hexagon IDs.
+    """
+    # Sort for order-independence
+    hex_str = "|".join(sorted(hexagons))
+    return hashlib.sha1(hex_str.encode("utf-8")).hexdigest()
+
+
+def calculate_accessibility_scores(
+    hexagons,
+    df_pois,
+    user_has_vehicle,
+    poi_types_config=None
+):
+    """
+    Original function with caching logic added.
+    Assumes df_pois does not change while the app is running.
+    """
+
+    #Build cache key ----
+    hex_key = _make_hex_key(hexagons)
+    cache_key = (hex_key, bool(user_has_vehicle))
+
+    if cache_key in _ACCESSIBILITY_CACHE:
+        print(">> Using cached accessibility scores")
+        return _ACCESSIBILITY_CACHE[cache_key].copy()
+    #Compute scores if not cached ----
     if poi_types_config is None:
-        # poi_types_config = {
-        #     'restaurant': {'types': ['restaurant'], 'decay_rate': 1.5, 'max_distance_km': 10},
-        #     'grocery_store': {'types': ['grocery_store'], 'decay_rate': 2, 'max_distance_km': 8},
-        #     'school': {'types': ['school'], 'decay_rate': 1, 'max_distance_km': 15},
-        #     'hospital': {'types': ['hospital'], 'decay_rate': 0.8, 'max_distance_km': 20},
-        #     'marta_stop': {'types': ['marta_stop'], 'decay_rate': 0.5, 'max_distance_km': 5},
-        #     'police_station': {'types': ['police_station'], 'decay_rate': 0.5, 'max_distance_km': 10},
-        # }
-        #account for whether user has vehicle or not based on max_distance rather than decay rate
-        if user_has_vehicle == False:
+        if user_has_vehicle is False:
             poi_types_config = {
-                'restaurant': {'types': ['restaurant'], 'decay_rate': 1.5, 'max_distance_km': 5, 'invert': False},
-                'grocery_store': {'types': ['grocery_store'], 'decay_rate': 2, 'max_distance_km': 2, 'invert': False},
-                'school': {'types': ['school'], 'decay_rate': 1, 'max_distance_km': 10, 'invert': False},
-                'hospital': {'types': ['hospital'], 'decay_rate': 0.8, 'max_distance_km': 20, 'invert': False},
-                'marta_stop': {'types': ['marta_stop'], 'decay_rate': 0.5, 'max_distance_km': 3, 'invert': False},
+                'restaurant':     {'types': ['restaurant'],     'decay_rate': 1.5, 'max_distance_km': 5,  'invert': False},
+                'grocery_store':  {'types': ['grocery_store'],  'decay_rate': 2,   'max_distance_km': 2,  'invert': False},
+                'school':         {'types': ['school'],         'decay_rate': 1,   'max_distance_km': 10, 'invert': False},
+                'hospital':       {'types': ['hospital'],       'decay_rate': 0.8, 'max_distance_km': 20, 'invert': False},
+                'marta_stop':     {'types': ['marta_stop'],     'decay_rate': 0.5, 'max_distance_km': 3,  'invert': False},
                 'police_station': {'types': ['police_station'], 'decay_rate': 0.5, 'max_distance_km': 10, 'invert': False},
-                'park': {'types': ['park'], 'decay_rate': 1.0, 'max_distance_km': 3, 'invert': False},
-                'crime_incident': {'types': ['crime_incident'], 'decay_rate': 2.0, 'max_distance_km': 3, 'invert': True},
+                'park':           {'types': ['park'],           'decay_rate': 1.0, 'max_distance_km': 3,  'invert': False},
+                'crime_incident': {'types': ['crime_incident'], 'decay_rate': 2.0, 'max_distance_km': 3,  'invert': True},
             }
         else:
             poi_types_config = {
-                'restaurant': {'types': ['restaurant'], 'decay_rate': 1.5, 'max_distance_km': 10, 'invert': False},
-                'grocery_store': {'types': ['grocery_store'], 'decay_rate': 2, 'max_distance_km': 8, 'invert': False},
-                'school': {'types': ['school'], 'decay_rate': 1, 'max_distance_km': 15, 'invert': False},
-                'hospital': {'types': ['hospital'], 'decay_rate': 0.8, 'max_distance_km': 20, 'invert': False},
-                'marta_stop': {'types': ['marta_stop'], 'decay_rate': 0.5, 'max_distance_km': 5, 'invert': False},
+                'restaurant':     {'types': ['restaurant'],     'decay_rate': 1.5, 'max_distance_km': 10, 'invert': False},
+                'grocery_store':  {'types': ['grocery_store'],  'decay_rate': 2,   'max_distance_km': 8,  'invert': False},
+                'school':         {'types': ['school'],         'decay_rate': 1,   'max_distance_km': 15, 'invert': False},
+                'hospital':       {'types': ['hospital'],       'decay_rate': 0.8, 'max_distance_km': 20, 'invert': False},
+                'marta_stop':     {'types': ['marta_stop'],     'decay_rate': 0.5, 'max_distance_km': 5,  'invert': False},
                 'police_station': {'types': ['police_station'], 'decay_rate': 0.5, 'max_distance_km': 10, 'invert': False},
-                'park': {'types': ['park'], 'decay_rate': 1.0, 'max_distance_km': 5, 'invert': False},
-                'crime_incident': {'types': ['crime_incident'], 'decay_rate': 2.0, 'max_distance_km': 3, 'invert': True},
+                'park':           {'types': ['park'],           'decay_rate': 1.0, 'max_distance_km': 5,  'invert': False},
+                'crime_incident': {'types': ['crime_incident'], 'decay_rate': 2.0, 'max_distance_km': 3,  'invert': True},
             }
-    
+
     hex_data = []
     print("Calculating accessibility scores for each hexagon...")
-    
+
     for i, hex_id in enumerate(hexagons):
         if i % 25 == 0:
             print(f"  Processing hexagon {i}/{len(hexagons)}...")
-        
+
         hex_center = h3.cell_to_latlng(hex_id)
         hex_scores = {'hex_id': hex_id, 'lat': hex_center[0], 'lon': hex_center[1]}
-        
+
         for poi_type, config in poi_types_config.items():
             pois_subset = df_pois[df_pois['type'].isin(config['types'])]
             score = distance_decay_score(
@@ -88,20 +108,89 @@ def calculate_accessibility_scores(hexagons, df_pois, user_has_vehicle ,poi_type
                 pois_subset,
                 decay_rate=config['decay_rate'],
                 max_distance_km=config['max_distance_km'],
-                invert=config.get('invert', False)
+                invert=config.get('invert', False),
             )
             hex_scores[f"{poi_type}_accessibility"] = score
-        
+
         hex_data.append(hex_scores)
-    
+
     df_hexagons = pd.DataFrame(hex_data)
     print(f"\nCalculated accessibility scores for {len(df_hexagons)} hexagons")
-    
+
     print("\nAccessibility Score Statistics:")
     score_columns = [f"{poi_type}_accessibility" for poi_type in poi_types_config]
     print(df_hexagons[score_columns].describe())
+    #save to cache
+    _ACCESSIBILITY_CACHE[cache_key] = df_hexagons
+    return df_hexagons.copy()
+
+# def calculate_accessibility_scores(hexagons, df_pois, user_has_vehicle ,poi_types_config=None):
+#     #update this fucntion to account for accesibility based on whether user has vehicle or not
+
+#     if poi_types_config is None:
+#         # poi_types_config = {
+#         #     'restaurant': {'types': ['restaurant'], 'decay_rate': 1.5, 'max_distance_km': 10},
+#         #     'grocery_store': {'types': ['grocery_store'], 'decay_rate': 2, 'max_distance_km': 8},
+#         #     'school': {'types': ['school'], 'decay_rate': 1, 'max_distance_km': 15},
+#         #     'hospital': {'types': ['hospital'], 'decay_rate': 0.8, 'max_distance_km': 20},
+#         #     'marta_stop': {'types': ['marta_stop'], 'decay_rate': 0.5, 'max_distance_km': 5},
+#         #     'police_station': {'types': ['police_station'], 'decay_rate': 0.5, 'max_distance_km': 10},
+#         # }
+#         #account for whether user has vehicle or not based on max_distance rather than decay rate
+#         if user_has_vehicle == False:
+#             poi_types_config = {
+#                 'restaurant': {'types': ['restaurant'], 'decay_rate': 1.5, 'max_distance_km': 5, 'invert': False},
+#                 'grocery_store': {'types': ['grocery_store'], 'decay_rate': 2, 'max_distance_km': 2, 'invert': False},
+#                 'school': {'types': ['school'], 'decay_rate': 1, 'max_distance_km': 10, 'invert': False},
+#                 'hospital': {'types': ['hospital'], 'decay_rate': 0.8, 'max_distance_km': 20, 'invert': False},
+#                 'marta_stop': {'types': ['marta_stop'], 'decay_rate': 0.5, 'max_distance_km': 3, 'invert': False},
+#                 'police_station': {'types': ['police_station'], 'decay_rate': 0.5, 'max_distance_km': 10, 'invert': False},
+#                 'park': {'types': ['park'], 'decay_rate': 1.0, 'max_distance_km': 3, 'invert': False},
+#                 'crime_incident': {'types': ['crime_incident'], 'decay_rate': 2.0, 'max_distance_km': 3, 'invert': True},
+#             }
+#         else:
+#             poi_types_config = {
+#                 'restaurant': {'types': ['restaurant'], 'decay_rate': 1.5, 'max_distance_km': 10, 'invert': False},
+#                 'grocery_store': {'types': ['grocery_store'], 'decay_rate': 2, 'max_distance_km': 8, 'invert': False},
+#                 'school': {'types': ['school'], 'decay_rate': 1, 'max_distance_km': 15, 'invert': False},
+#                 'hospital': {'types': ['hospital'], 'decay_rate': 0.8, 'max_distance_km': 20, 'invert': False},
+#                 'marta_stop': {'types': ['marta_stop'], 'decay_rate': 0.5, 'max_distance_km': 5, 'invert': False},
+#                 'police_station': {'types': ['police_station'], 'decay_rate': 0.5, 'max_distance_km': 10, 'invert': False},
+#                 'park': {'types': ['park'], 'decay_rate': 1.0, 'max_distance_km': 5, 'invert': False},
+#                 'crime_incident': {'types': ['crime_incident'], 'decay_rate': 2.0, 'max_distance_km': 3, 'invert': True},
+#             }
     
-    return df_hexagons
+#     hex_data = []
+#     print("Calculating accessibility scores for each hexagon...")
+    
+#     for i, hex_id in enumerate(hexagons):
+#         if i % 25 == 0:
+#             print(f"  Processing hexagon {i}/{len(hexagons)}...")
+        
+#         hex_center = h3.cell_to_latlng(hex_id)
+#         hex_scores = {'hex_id': hex_id, 'lat': hex_center[0], 'lon': hex_center[1]}
+        
+#         for poi_type, config in poi_types_config.items():
+#             pois_subset = df_pois[df_pois['type'].isin(config['types'])]
+#             score = distance_decay_score(
+#                 hex_center,
+#                 pois_subset,
+#                 decay_rate=config['decay_rate'],
+#                 max_distance_km=config['max_distance_km'],
+#                 invert=config.get('invert', False)
+#             )
+#             hex_scores[f"{poi_type}_accessibility"] = score
+        
+#         hex_data.append(hex_scores)
+    
+#     df_hexagons = pd.DataFrame(hex_data)
+#     print(f"\nCalculated accessibility scores for {len(df_hexagons)} hexagons")
+    
+#     print("\nAccessibility Score Statistics:")
+#     score_columns = [f"{poi_type}_accessibility" for poi_type in poi_types_config]
+#     print(df_hexagons[score_columns].describe())
+    
+#     return df_hexagons
 
 def normalize_user_weights(raw_weights, method='exponential', scale_factor=2, power=1.5):
     # filtered = {k: v for k, v in raw_weights.items() if v > 0}
