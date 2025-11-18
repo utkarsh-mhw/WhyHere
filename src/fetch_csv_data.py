@@ -12,7 +12,12 @@ from typing import List, Dict, Any
 
 # NOTE: Set these environment variables in your Flask environment (.env file or shell)
 DATABRICKS_HOST = os.environ.get("DATABRICKS_HOST", "https://dbc-e1432fe3-232e.cloud.databricks.com")
+
+###### IMPORTANT ###### 
+# Do not add the databricks token here, add as environment variable instead, creating problems while pushing to github #
+###### IMPORTANT ###### 
 DATABRICKS_TOKEN = os.environ.get("DATABRICKS_TOKEN", "databricks_token_placeholder")
+
 DATABRICKS_WAREHOUSE_ID = os.environ.get("DATABRICKS_WAREHOUSE_ID", "b57287b3b881de1c")
 
 # ====================================================================
@@ -129,6 +134,11 @@ def load_databricks_pois(table_name: str = 'restaurants') -> pd.DataFrame:
 #         print("Failed to load data.")
 
 def load_pois():
+    
+    ############## IMPORTANT ##############
+    ############### the latest file is combine_datasets_v2.csv - Aayush to update this and its dependecies ##############
+    ############## IMPORTANT ##############
+
     file_to_read = "data/input_data/atlanta_pois.csv"
     df_pois = pd.read_csv(file_to_read)
     # pois_dict = df_pois.to_dict(orient='records')
@@ -145,4 +155,9 @@ def load_pois():
     '''
     
     return df_pois
+
+def load_rent():
+    file_to_read = "data/input_data/Rent_atlanta.csv"
+    df_rent = pd.read_csv(file_to_read)
+    return df_rent
 

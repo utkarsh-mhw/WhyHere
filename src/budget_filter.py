@@ -74,11 +74,24 @@ def get_nearest_rent(df_budget_hex, hexagons, K=3):
 
 
 #merge budget with accesibility scores
-
-
-
-# pass to scoring and smoothing fucntions - nothing required in this file
+def merge_budget_with_accessibility(df_hexagons, df_budget_hex):
+    print(f"Merging budget data with {len(df_budget_hex)} with accessibility data with {len(df_hexagons)}")
+    df_merged = pd.merge(df_hexagons, df_budget_hex, on="hex_id", how="inner")
+    if len(df_merged) == len(df_hexagons):
+        print(f"Merge successful: all accessibility hexagons have budget data; total entries: {len(df_merged)}")
+    else:
+        print("Merge warning: some hex grids have been dropped")
+    
+    return df_merged
+    
 
 #filter by budget
+def filter_hexagons_by_budget(df_hexagons, max_budget):
 
-# apply user weights, min max scaling, clustering on filtered hex grid
+    print(f"Before filtering: {len(df_hexagons)} hexagons")
+    
+    df_filtered = df_hexagons[df_hexagons['avg_rent'] <= max_budget].copy()
+    
+    print(f"After filtering: {len(df_filtered)} hexagons")
+    
+    return df_filtered

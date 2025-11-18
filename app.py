@@ -12,6 +12,7 @@ from src.scoring import *
 from src.threshold_clustering import *
 from src.dbscan_clustering import *
 from src.visualization import *
+from src.budget_filter import *
 
 # ====================================================================
 # Configuration
@@ -73,6 +74,7 @@ def get_poi_data():
     try:
         # Call the data loader function
         df_pois = load_pois()
+        df_rent = load_rent()
         # we'll need data form UI payload
         # format required
         """
@@ -111,18 +113,37 @@ def get_poi_data():
 
         print(f"User Radius (miles): {user_radius_miles}")
         print(f"User Weights: {user_weights}")
+
+
+
         #call data_prep method here, providing df_pois as input
         hexagons = create_hex_grids_with_radius(df_pois, radius_km=user_radius_miles*1.60934, center=user_center , size_of_grid=8)
         print(f"Number of hexagons created: {len(hexagons)}")
 
         #call scoring method here, providing scored data as input
         df_hexagons = calculate_accessibility_scores(hexagons, df_pois, has_car)
-        df_hexagons = apply_user_weights(
-            df_hexagons,
-            user_weights,
-            smooth_before_weighting=True,
-            neighbor_weight=0.3
-        )
+
+        #perform fucntions on rent
+        df_budget_hex = convert_rent_data_to_h3(df_rent)
+        df_out = get_nearest_rent(df_budget_hex, hexagons, K=1)
+        df_hexagons = merge_budget_with_accessibility(df_hexagons, df_out)
+
+        #smooth the scores
+        df_hexagons = smooth_scores_spatially(df_hexagons, neighbor_weight=0.3)
+
+        #filter hexagons based on budget
+        df_hexagons = filter_hexagons_by_budget(df_hexagons, max_budget=budget)
+
+        #apply user weights
+        df_hexagons = apply_user_weights(df_hexagons, user_weights)
+
+
+        # df_hexagons = apply_user_weights(
+        #     df_hexagons,
+        #     user_weights,
+        #     smooth_before_weighting=True,
+        #     neighbor_weight=0.3
+        # )
 
         #call clustering method here, providing scored data as input
         df_classified = cluster_based_on_score(df_hexagons, n_tiers=10)

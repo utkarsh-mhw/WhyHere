@@ -261,7 +261,7 @@ def smooth_scores_spatially(df_hexagons, score_columns=None, neighbor_weight=0.3
     return df_smoothed
 
 
-def apply_user_weights(df_hexagons, raw_user_weights, smooth_before_weighting=True, neighbor_weight=0.3, normalization_method='exponential'):
+def apply_user_weights(df_hexagons, raw_user_weights, smooth_before_weighting=False, neighbor_weight=0.3, normalization_method='exponential'):
 
     
     print(f"Applying user preferences: {raw_user_weights}")
